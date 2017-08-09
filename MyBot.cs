@@ -2,6 +2,7 @@
 using Discord;
 using Discord.Commands;
 using Discord.Audio;
+using System.Threading;
 using System.Linq;
 using System.IO;
 using NAudio.Wave;
@@ -13,6 +14,7 @@ namespace IngeBot
         int MIN_SBOARD = 0;
         int MAX_SBOARD = 25;
         const int PERM_NUM = 23;
+        static int timing = 0;
         IAudioClient sBoardC;
         bool isJoined = false;
         bool sbStatus = false;
@@ -24,6 +26,10 @@ namespace IngeBot
         string sbListDir = "\0";
         Random rnd = new Random();
         DiscordClient discord;
+
+        Notification[] notifys = new Notification[16];
+        int ActiveNots = 0;
+
 
         public MyBot(string token, string modid, string sbstat)
         {
@@ -48,6 +54,8 @@ namespace IngeBot
 
             Commands();
 
+            
+
             discord.ExecuteAndWait(async () =>
             {
                 await discord.Connect(token, TokenType.Bot);
@@ -56,6 +64,7 @@ namespace IngeBot
                 discord.SetGame(game);
             });            
         }
+        
 
         public MyBot(string token, string modid, string sbstat, string boaid, string sbdir, string sbsize, string sblist)
         {
@@ -284,6 +293,7 @@ namespace IngeBot
                         "Use voice activation: " + user.ServerPermissions.UseVoiceActivation + "\n" +
                         "```");
                 });
+
             commands.CreateCommand("roleperms")
                 .Parameter("role", ParameterType.Required)
                 .Do(async (e) =>
@@ -326,12 +336,14 @@ namespace IngeBot
                         "Use voice activation: " + role.Permissions.UseVoiceActivation + "\n" +
                         "```");
                 });
+
             commands.CreateCommand("drole")
                 .Parameter("this", ParameterType.Required)
                 .Do(async (e) =>
                 {
                     await e.Server.FindRoles(e.GetArg("this"), false).FirstOrDefault().Delete();
                 });
+
             commands.CreateCommand("kick")
                 .Parameter("id", ParameterType.Required)
                 .Do(async (e) =>
@@ -357,6 +369,7 @@ namespace IngeBot
                         await e.Channel.SendMessage(chk[0].User.NicknameMention + ", you don't have permissions to execute this command.");
                     }
                 });
+
             commands.CreateCommand("ban")
                 .Parameter("id", ParameterType.Required)
                 .Parameter("days", ParameterType.Required)
@@ -383,6 +396,7 @@ namespace IngeBot
                         await e.Channel.SendMessage(chk[0].User.NicknameMention + ", you don't have permissions to execute this command.");
                     }
                 });
+
             commands.CreateCommand("echo")
                  .Do(async (e) =>
                  {
@@ -402,6 +416,7 @@ namespace IngeBot
                          await e.Channel.SendMessage(chk[0].User.NicknameMention + ", you don't have permissions to execute this command.");
                      }
                  });
+
             commands.CreateCommand("echotts")
                  .Do(async (e) =>
                  {
@@ -421,10 +436,11 @@ namespace IngeBot
                          await e.Channel.SendMessage(chk[0].User.NicknameMention + ", you don't have permissions to execute this command.");
                      }
                  });
+
             commands.CreateCommand("plist")
                 .Do(async (e) =>
                 {
-                    var plist = File.ReadAllText("c:/bot/perms.txt");
+                    var plist = File.ReadAllText(sbDir + "perms.txt");
                     await e.Channel.SendMessage(plist);
                 });
 
@@ -465,6 +481,7 @@ namespace IngeBot
                         await e.Channel.SendMessage(chk[0].User.NicknameMention + ", you don't have permissions to execute this command.");
                     }
                 });
+
             commands.CreateCommand("move")
                 .Parameter("user", ParameterType.Required)
                 .Parameter("channel", ParameterType.Required)
@@ -474,6 +491,7 @@ namespace IngeBot
                     var channel = e.Server.FindChannels(e.GetArg("channel"), ChannelType.Voice, false).FirstOrDefault();
                     
                 });
+
             commands.CreateCommand("op")
                 .Parameter("id", ParameterType.Required)
                 .Parameter("role", ParameterType.Required)
@@ -517,6 +535,7 @@ namespace IngeBot
                         await e.Channel.SendMessage(chk[0].User.NicknameMention + ", you don't have permissions to execute this command.");
                     }
                 });
+
             commands.CreateCommand("deop")
                 .Parameter("id", ParameterType.Required)
                 .Parameter("role", ParameterType.Required)
@@ -560,6 +579,7 @@ namespace IngeBot
                         await e.Channel.SendMessage(chk[0].User.NicknameMention + ", you don't have permissions to execute this command.");
                     }
                 });
+
             commands.CreateCommand("alert")
                 .Do(async (e) =>
                 {
@@ -567,11 +587,13 @@ namespace IngeBot
                     await user.AddRoles(e.Server.GetRole(MODID));
                     await user.AddRoles(e.Server.GetRole(BOAID));
                 });
+
             commands.CreateCommand("conio")
                 .Do(async (e) =>
                 {
-                   await conio(e);
+                   await Conio(e);
                 });
+
             commands.CreateCommand("join")
                 .Parameter("channel", ParameterType.Required)
                 .Do(async (e) =>
@@ -580,23 +602,25 @@ namespace IngeBot
                     chk = await e.Channel.DownloadMessages(1);
                     if (e.GetArg("channel") == null)
                     {
-                        await join(e, null);
+                        await Join(e, null);
                     }
                     else
                     {
-                        await join(e, e.GetArg("channel"));
+                        await Join(e, e.GetArg("channel"));
                     }
                     isJoined = true;
                 });
+
             commands.CreateCommand("join")
                 .Do(async (e) =>
                 {
                     Message[] chk;
                     chk = await e.Channel.DownloadMessages(1);
                     var toJoin = chk.FirstOrDefault().User.VoiceChannel.Name; 
-                    await join(e, toJoin);
+                    await Join(e, toJoin);
                     isJoined = true;
                 });
+
             commands.CreateCommand("s")
                 .Parameter("num", ParameterType.Required)
                 .Do(async (e) =>
@@ -682,7 +706,81 @@ namespace IngeBot
                         "Permissions' raw value: " + role.Permissions.RawValue
                     );
                 });
-           
+
+            commands.CreateCommand("notify")
+                .Parameter("istime", ParameterType.Required)
+                .Parameter("minutes", ParameterType.Required)
+                .Parameter("mention", ParameterType.Required)
+                .Parameter("text", ParameterType.Required)
+                .Do(async (e) =>
+                {
+                    Message[] chk;
+                    chk = await e.Channel.DownloadMessages(1);
+                    if (chk[0].User.HasRole(e.Server.GetRole(MODID)))
+                    {
+                        double dtiming = Convert.ToDouble(e.GetArg("minutes")) * 60 * 1000;
+                        timing = (int)dtiming;
+                        if (e.GetArg("mention") == "1")
+                        {
+                            if (e.GetArg("istime") == "1")
+                            {
+                                notifys[ActiveNots] = new Notification(e.GetArg("text"), chk[0].User, timing, MentionType.Author, MomentType.FromCertain, e);
+                            }
+                            else
+                            {
+                                notifys[ActiveNots] = new Notification(e.GetArg("text"), chk[0].User, timing, MentionType.Author, MomentType.FromCall, e);
+                            }
+                        }
+                        else
+                        {
+                            if (e.GetArg("istime") == "1")
+                            {
+                                notifys[ActiveNots] = new Notification(e.GetArg("text"), chk[0].User, timing, MentionType.Noone, MomentType.FromCertain, e);
+                            }
+                            else
+                            {
+                                notifys[ActiveNots] = new Notification(e.GetArg("text"), chk[0].User, timing, MentionType.Noone, MomentType.FromCall, e);
+                            }
+                        }
+                        
+                        ActiveNots++;
+                        await e.Channel.SendMessage(chk[0].User.NicknameMention + ", successfuly created notification!");
+                    }
+                    else
+                    {
+                        await e.Channel.SendMessage(chk[0].User.NicknameMention + ", you don't have permissions to execute this command.");
+                    }
+                });
+
+            commands.CreateCommand("mute")
+                .Do(async (e) =>
+                {
+                    Message[] chk;
+                    chk = await e.Channel.DownloadMessages(1);
+                    if (chk[0].User.HasRole(e.Server.GetRole(MODID)))
+                    {
+                        await e.Channel.SendMessage(chk[0].User.NicknameMention + ", successfuly muted notify message");
+                    }
+                    else
+                    {
+                        await e.Channel.SendMessage(chk[0].User.NicknameMention + ", you don't have permissions to execute this command.");
+                    }
+                });
+
+            commands.CreateCommand("time")
+                .Do(async (e) =>
+                {
+                    Message[] chk;
+                    chk = await e.Channel.DownloadMessages(1);
+                    if (chk[0].User.HasRole(e.Server.GetRole(MODID)))
+                    {
+                        
+                    }
+                    else
+                    {
+                        await e.Channel.SendMessage(chk[0].User.NicknameMention + ", you don't have permissions to execute this command.");
+                    }
+                });
         }
 
         private async System.Threading.Tasks.Task<bool> ParseMessage(CommandEventArgs e)
@@ -699,13 +797,14 @@ namespace IngeBot
                 default:
                     return true;
             }
-        }
+        }        
 
         public void SendAudio(string name)
         {
+            string path = sbDir + name + ".mp3";
             var channelCount = discord.GetService<AudioService>().Config.Channels;
             var OutFormat = new WaveFormat(48000, 16, channelCount);
-            using (var MP3Reader = new Mp3FileReader(sbDir + name + ".mp3"))
+            using (var MP3Reader = new Mp3FileReader(path))
             using (var resampler = new MediaFoundationResampler(MP3Reader, OutFormat))
             {
                 resampler.ResamplerQuality = 60;
@@ -725,7 +824,7 @@ namespace IngeBot
             }
         }
 
-        public async System.Threading.Tasks.Task join(CommandEventArgs e, string channel)
+        public async System.Threading.Tasks.Task Join(CommandEventArgs e, string channel)
         {
             if (channel != null)
             {
@@ -743,7 +842,7 @@ namespace IngeBot
             }
         }
        
-        public async System.Threading.Tasks.Task conio(CommandEventArgs e)
+        public async System.Threading.Tasks.Task Conio(CommandEventArgs e)
         {
             str = "";
             while (str != "quit")
