@@ -26,7 +26,7 @@ namespace IngeBot
         static MomentType Moment { get; set; }
         static DateTime Start { get; set; }
         static string ToMention { get; set; }
-        static bool Status { get; set; }
+        public static bool Status { get; set; }
         Thread notifyThread = new Thread(new ParameterizedThreadStart(Send));
 
         public Notification(string text, User auth, int timing, MentionType ment, MomentType mom, CommandEventArgs e)
@@ -60,23 +60,23 @@ namespace IngeBot
                 
         public static void Send(object e)
         {
-            DateTime Now = DateTime.Now;
-            if (Now.Ticks >= Start.Ticks)
+            while (Status)
             {
-                while (Status)
-                {
-                    CommandEventArgs ComEv = (CommandEventArgs)e;
-                    if (Moment == MomentType.FromCall)
-                    {
-                        ComEv.Channel.SendMessage(ReadyStr);
-                    }
-                    else
-                    {
-                        ComEv.Channel.SendMessage(ReadyStr + Now.Hour + ":" + Now.Minute);
-                    }
-                    Thread.Sleep(Timing);
-                }
+                CommandEventArgs ComEv = (CommandEventArgs)e;
+                ComEv.Channel.SendMessage(ReadyStr);
+                Thread.Sleep(Timing);
             }                       
+        }
+
+        public void Terminate()
+        {
+            Status = false;
+        }
+
+        public string Condition()
+        {
+            string statstr = ", message: " + ReadyStr + ", author: " + Author.Name;
+            return statstr;
         }
     }
 
