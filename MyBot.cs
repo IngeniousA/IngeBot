@@ -2,13 +2,20 @@
 using Discord;
 using Discord.Commands;
 using Discord.Audio;
-using System.Threading;
 using System.Linq;
 using System.IO;
 using NAudio.Wave;
 
 namespace IngeBot
 {
+
+    struct NotificationsInfo
+    {
+        public string content;
+        public int numThread;
+        public Notification trigger;
+    }
+
     class MyBot
     {
         int MIN_SBOARD = 0;
@@ -26,8 +33,7 @@ namespace IngeBot
         string sbListDir = "\0";
         Random rnd = new Random();
         DiscordClient discord;
-
-        Notification[] notifys = new Notification[16];
+        NotificationsInfo[] notifys = new NotificationsInfo[16];
         int ActiveNots = 0;
 
 
@@ -179,7 +185,8 @@ namespace IngeBot
                 {
                     await e.Channel.SendMessage("Commands: ```\n list \n modcheck \n clearcom \n clearall \n gtho \n clear <NUMBER> " +
                                                 "\n myperms \n permsof <USER> \n botpermsof <USER> \n echo \n echotts \n op <USER> <ROLE> \n deop <USER> <ROLE> \n s <NUMBER> " +
-                                                "\n nrole <ROLE NAME> <PERMISSION STRING> <R> <G> <B> \n plist \n roleperms <ROLE NAME> \n drole <ROLE> \n kick <USER> \n ban <USER> <DAYS>```");
+                                                "\n nrole <ROLE NAME> <PERMISSION STRING> <R> <G> <B> \n plist \n roleperms <ROLE NAME> \n drole <ROLE> \n kick <USER> \n ban <USER> <DAYS> \n" +
+                                                "notify <MINUTES> <MENTION AUTHOR? (1 or 0)> <NOTIFICATION TEXT> \n timer <MINUTES> \n clock```");
                 });
 
             commands.CreateCommand("gtho")
@@ -189,6 +196,10 @@ namespace IngeBot
                     chk = await e.Channel.DownloadMessages(1);
                     if (chk[0].User.HasRole(e.Server.GetRole(MODID)))
                     {
+                        for (int i = 0; i < ActiveNots; i++)
+                        {
+                            notifys[i].trigger.Terminate();
+                        }
                         await discord.Disconnect();
                     }
                     else
@@ -708,10 +719,9 @@ namespace IngeBot
                 });
 
             commands.CreateCommand("notify")
-                .Parameter("istime", ParameterType.Required)
                 .Parameter("minutes", ParameterType.Required)
                 .Parameter("mention", ParameterType.Required)
-                .Parameter("text", ParameterType.Required)
+                .Parameter("text", ParameterType.Unparsed)
                 .Do(async (e) =>
                 {
                     Message[] chk;
@@ -722,27 +732,25 @@ namespace IngeBot
                         timing = (int)dtiming;
                         if (e.GetArg("mention") == "1")
                         {
-                            if (e.GetArg("istime") == "1")
+                            ActiveNots++;
+                            notifys[ActiveNots].content = e.GetArg("text");
+                            notifys[ActiveNots].numThread = ActiveNots;
+                            notifys[ActiveNots].trigger = new Notification(e.GetArg("text"), chk[0].User, timing, MentionType.Author, e);
+                            for (int i = 0; i < ActiveNots; i++)
                             {
-                                notifys[ActiveNots] = new Notification(e.GetArg("text"), chk[0].User, timing, MentionType.Author, MomentType.FromCertain, e);
-                            }
-                            else
-                            {
-                                notifys[ActiveNots] = new Notification(e.GetArg("text"), chk[0].User, timing, MentionType.Author, MomentType.FromCall, e);
+                                notifys[i].trigger.ReadyStr = notifys[i].content;
                             }
                         }
                         else
                         {
-                            if (e.GetArg("istime") == "1")
+                            notifys[ActiveNots].content = e.GetArg("text");
+                            notifys[ActiveNots].numThread = ActiveNots;
+                            notifys[ActiveNots].trigger = new Notification(e.GetArg("text"), chk[0].User, timing, MentionType.Noone, e);
+                            for (int i = 0; i < ActiveNots; i++)
                             {
-                                notifys[ActiveNots] = new Notification(e.GetArg("text"), chk[0].User, timing, MentionType.Noone, MomentType.FromCertain, e);
+                                notifys[i].trigger.ReadyStr = notifys[i].content;
                             }
-                            else
-                            {
-                                notifys[ActiveNots] = new Notification(e.GetArg("text"), chk[0].User, timing, MentionType.Noone, MomentType.FromCall, e);
-                            }
-                        }
-                        
+                        }                        
                         ActiveNots++;
                         await e.Channel.SendMessage(chk[0].User.NicknameMention + ", successfuly created notification!");
                     }
@@ -752,14 +760,20 @@ namespace IngeBot
                     }
                 });
 
-            commands.CreateCommand("mute")
+            commands.CreateCommand("threads")
                 .Do(async (e) =>
                 {
                     Message[] chk;
                     chk = await e.Channel.DownloadMessages(1);
                     if (chk[0].User.HasRole(e.Server.GetRole(MODID)))
                     {
-                        await e.Channel.SendMessage(chk[0].User.NicknameMention + ", successfuly muted notify message");
+                        string conditions = "```Active threads:";
+                        for (int i = 0; i < ActiveNots; i++)
+                        {
+                            conditions += "\nThread #" + i + notifys[i].trigger.Condition();
+                        }
+                        conditions += "```";
+                        await e.Channel.SendMessage(conditions);
                     }
                     else
                     {
@@ -767,14 +781,66 @@ namespace IngeBot
                     }
                 });
 
-            commands.CreateCommand("time")
+            commands.CreateCommand("mute")
+                .Parameter("thread", ParameterType.Optional)
                 .Do(async (e) =>
                 {
                     Message[] chk;
                     chk = await e.Channel.DownloadMessages(1);
                     if (chk[0].User.HasRole(e.Server.GetRole(MODID)))
                     {
-                        
+                        if (e.GetArg("thread") == null)
+                        {
+                            for (int i = 0; i < ActiveNots; i++)
+                            {
+                                notifys[i].trigger.Terminate();
+                            }
+
+                            await e.Channel.SendMessage(chk[0].User.NicknameMention + ", successfuly muted notifications");
+                        }
+                    }
+                    else
+                    {
+                        await e.Channel.SendMessage(chk[0].User.NicknameMention + ", you don't have permissions to execute this command.");
+                    }
+                });
+
+            commands.CreateCommand("timer")
+                .Parameter("minutes", ParameterType.Required)
+                .Do(async (e) =>
+                {
+                    Message[] chk;
+                    chk = await e.Channel.DownloadMessages(1);
+                    if (chk[0].User.HasRole(e.Server.GetRole(MODID)))
+                    {
+                        try
+                        {
+                            double dtiming = Convert.ToDouble(e.GetArg("minutes")) * 60 * 1000;
+                            timing = (int)dtiming;
+                        }
+                        catch (FormatException)
+                        {
+                            await e.Channel.SendMessage(chk[0].User.NicknameMention + ", incorrect argument format.");
+                            throw;
+                        }
+                        if (timing < 0)
+                        {
+                            timing = -timing;
+                        }
+                        else if (timing == 0)
+                        {
+                            timing++;
+                        }
+
+                        if (timing >= Int32.MaxValue)
+                        {
+                            await e.Channel.SendMessage(chk[0].User.NicknameMention + ", incorrect argument format.");
+                        }
+                        else
+                        {
+                            await e.Channel.SendMessage(chk[0].User.NicknameMention + ", successfuly set timer for " + timing / 60000 + " minutes.");
+                            TimerN timer = new TimerN(chk[0].User, timing, e);
+                        }                        
                     }
                     else
                     {
@@ -782,22 +848,6 @@ namespace IngeBot
                     }
                 });
         }
-
-        private async System.Threading.Tasks.Task<bool> ParseMessage(CommandEventArgs e)
-        {
-            Message[] chk;
-            chk = await e.Channel.DownloadMessages(1);
-            var value = chk.FirstOrDefault().RawText;
-            switch (value)
-            {
-                case "1":
-                    return true;
-                case "0":
-                    return false;
-                default:
-                    return true;
-            }
-        }        
 
         public void SendAudio(string name)
         {

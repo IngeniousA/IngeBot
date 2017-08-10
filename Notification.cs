@@ -5,12 +5,6 @@ using System.Threading;
 
 namespace IngeBot
 {
-    enum MomentType
-    {
-        FromCall = 0,
-        FromCertain = 1
-    }
-    
     enum MentionType
     {
         Noone = 0,
@@ -20,16 +14,16 @@ namespace IngeBot
     class Notification
     {
         static string Text { get; set; }
-        static string ReadyStr { get; set; }
-        static User Author { get; set; }
+        public string ReadyStr { get; set; }
+        public static string StringToSend { get; set; }
+        public User Author { get; set; }
         static int Timing { get; set; }
-        static MomentType Moment { get; set; }
         static DateTime Start { get; set; }
         static string ToMention { get; set; }
         public static bool Status { get; set; }
         Thread notifyThread = new Thread(new ParameterizedThreadStart(Send));
 
-        public Notification(string text, User auth, int timing, MentionType ment, MomentType mom, CommandEventArgs e)
+        public Notification(string text, User auth, int timing, MentionType ment, CommandEventArgs e)
         {
             Text = text;
             Author = auth;
@@ -39,21 +33,10 @@ namespace IngeBot
                 ToMention = auth.Mention;
             }
 
-            if (mom == MomentType.FromCall)
-            {                
-                ReadyStr = ToMention + " " + Text;
-                Timing = timing;
-                Start = DateTime.Now;
-                Status = true;
-            }
-            else
-            {
-                ReadyStr = ToMention + " It's ";
-                Timing = timing;
-                Start = DateTime.Now;
-                Start.AddMinutes(60 - Start.Minute);
-                Status = true;
-            }
+            ReadyStr = ToMention + " " + Text;
+            StringToSend = ReadyStr;
+            Timing = timing;
+            Status = true;
 
             notifyThread.Start(e);
         }
@@ -63,7 +46,7 @@ namespace IngeBot
             while (Status)
             {
                 CommandEventArgs ComEv = (CommandEventArgs)e;
-                ComEv.Channel.SendMessage(ReadyStr);
+                ComEv.Channel.SendMessage(StringToSend);
                 Thread.Sleep(Timing);
             }                       
         }
@@ -71,6 +54,9 @@ namespace IngeBot
         public void Terminate()
         {
             Status = false;
+            Timing = 0;
+            Author = null;
+
         }
 
         public string Condition()
