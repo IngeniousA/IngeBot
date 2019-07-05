@@ -1,5 +1,5 @@
 # IngeBot (deprecated)
-## WARNING! This program is outdated, as well as the code in this repository. However, you can have a look at [Angela](https://github.com/IngeniousA/Angela), the successor of IngeBot.
+## WARNING! This program is outdated, as well as the code in this repository. However, you can have a look at [Angela](https://github.com/shoraii/Angela), the successor of IngeBot.
 **Bot for Discord written with C# and Discord.Net**
 ### How to setup IngeBot?
 1. Download and run `IngeBot_Installation.exe`
